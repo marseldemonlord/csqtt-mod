@@ -116,11 +116,15 @@ class TunVpnService : VpnService() {
                 CsqttConstants.General.PACKAGE_VK_CALLS
             )
 
+            val routingMode = settingsStore.routingMode.first()
+            val customRoutes = settingsStore.customRoutes.first()
+
             val builder = Builder()
                 .setSession("CSQTT")
                 .setMtu(CsqttConstants.Vpn.DEFAULT_MTU)
                 .addAddress(clientIp, 32)
-                .addRoute("0.0.0.0", 0)
+
+            VpnRoutingPolicy.applyRoutes(builder, routingMode, customRoutes)
 
             var validDnsServers = 0
             dns.split(",").map { it.trim() }.filter { it.isNotEmpty() }.forEach { dnsServer ->

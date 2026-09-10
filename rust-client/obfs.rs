@@ -34,6 +34,45 @@ impl ObfsMode {
     }
 }
 
+#[inline]
+pub fn calculate_adaptive_padding(
+    mode: ObfsMode,
+    payload_len: usize,
+    base_padding_max: usize,
+    rng: &mut impl rand::Rng,
+) -> usize {
+    if base_padding_max == 0 {
+        return 1;
+    }
+    match mode {
+        ObfsMode::Audio => {
+            // Opus audio simulation: shape small packets (e.g. TCP ACK/DNS) into realistic audio frame sizes
+            if payload_len < 100 {
+                let target = 100 + rng.random_range(0..=48);
+                let needed = target.saturating_sub(payload_len);
+                needed.clamp(1, 255)
+            } else {
+                let jitter = rng.random_range(0..base_padding_max.max(24));
+                (jitter + 1).min(255)
+            }
+        }
+        ObfsMode::Video => {
+            // Video RTP slice simulation: add randomized jitter to mask raw MTU footprints
+            if payload_len >= 800 {
+                let jitter = rng.random_range(16..=base_padding_max.max(64));
+                (jitter + 1).min(255)
+            } else if payload_len < 120 {
+                let target = 128 + rng.random_range(0..=32);
+                let needed = target.saturating_sub(payload_len);
+                needed.clamp(1, 255)
+            } else {
+                let jitter = rng.random_range(0..base_padding_max);
+                (jitter + 1).min(255)
+            }
+        }
+    }
+}
+
 pub struct ObfsConfig {
     pub padding_max: usize,
     pub ssrc: u32,
@@ -130,18 +169,24 @@ impl ObfsCipher {
         let timestamp = state
             .initial_timestamp
             .wrapping_add(duration_ticks(elapsed, rtp_clock_rate(payload_type)));
-        let padding_max = config.padding_max;
-        let padding_random = if padding_max == 0 {
-            0
+        let tag_len = if config.mode == ObfsMode::Video { 10 } else { 16 };
+        let max_allowed_wire = 1460usize;
+        let overhead_without_padding = 24usize.saturating_add(payload_len).saturating_add(tag_len);
+        let max_safe_padding = if overhead_without_padding < max_allowed_wire {
+            (max_allowed_wire - overhead_without_padding).min(255)
         } else {
-            state.rng.random_range(0..padding_max)
+            1
         };
-        let padding_total = padding_random + 1;
-        let tail = if config.mode == ObfsMode::Video {
-            padding_total + 10
-        } else {
-            padding_total + 16
-        };
+        let mut padding_total = calculate_adaptive_padding(
+            config.mode,
+            payload_len,
+            config.padding_max,
+            &mut state.rng,
+        );
+        if padding_total > max_safe_padding {
+            padding_total = max_safe_padding.max(1);
+        }
+        let tail = padding_total + tag_len;
         let range = packet.range();
         if range.start < 24
             || range

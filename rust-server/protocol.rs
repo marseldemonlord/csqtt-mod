@@ -3885,10 +3885,27 @@ fn wrap_legacy_into(
     header[21..23].copy_from_slice(&transport_seq.to_be_bytes());
     header[23] = 0;
     let storage = output.storage_mut();
+    let max_allowed_wire = 1460usize;
     if session.is_srtp {
         let padding_max = if payload_type == 96 { 60 } else { 24 };
-        let random_padding = rng.gen_range(0..padding_max);
-        let padding = random_padding + 1;
+        let overhead_without_padding = 24usize.saturating_add(plain.len()).saturating_add(10);
+        let max_safe_padding = if overhead_without_padding < max_allowed_wire {
+            (max_allowed_wire - overhead_without_padding).min(255)
+        } else {
+            1
+        };
+        let mut padding = if payload_type == 111 && plain.len() < 100 {
+            let target = 100 + rng.gen_range(0..=48);
+            target.saturating_sub(plain.len()).clamp(1, 255)
+        } else if payload_type == 96 && plain.len() >= 800 {
+            (rng.gen_range(16..=padding_max.max(64)) + 1).min(255)
+        } else {
+            (rng.gen_range(0..padding_max) + 1).min(255)
+        };
+        if padding > max_safe_padding {
+            padding = max_safe_padding.max(1);
+        }
+        let random_padding = padding.saturating_sub(1);
         let ciphertext_len = plain
             .len()
             .checked_add(padding)
@@ -3919,12 +3936,24 @@ fn wrap_legacy_into(
         record_crypto_op(count_crypto);
         return Ok(total);
     }
-    let random_padding = if payload_type == 111 {
-        rng.gen_range(0..24usize)
+    let padding_max = if payload_type == 111 { 24usize } else { 60usize };
+    let overhead_without_padding = 24usize.saturating_add(plain.len()).saturating_add(16);
+    let max_safe_padding = if overhead_without_padding < max_allowed_wire {
+        (max_allowed_wire - overhead_without_padding).min(255)
     } else {
-        rng.gen_range(0..60usize)
+        1
     };
-    let padding = random_padding + 1;
+    let mut padding = if payload_type == 111 && plain.len() < 100 {
+        let target = 100 + rng.gen_range(0..=48);
+        target.saturating_sub(plain.len()).clamp(1, 255)
+    } else if payload_type == 96 && plain.len() >= 800 {
+        (rng.gen_range(16..=padding_max.max(64)) + 1).min(255)
+    } else {
+        (rng.gen_range(0..padding_max) + 1).min(255)
+    };
+    if padding > max_safe_padding {
+        padding = max_safe_padding.max(1);
+    }
     let total = 24usize
         .checked_add(plain.len())
         .and_then(|value| value.checked_add(16))

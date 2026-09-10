@@ -133,6 +133,8 @@ class SettingsStore(context: Context) {
         private val BATTERY_OPTIMIZATION_PROMPT_HANDLED =
             booleanPreferencesKey("battery_optimization_prompt_handled")
         private val AUTO_PAUSE_ON_WIFI = booleanPreferencesKey("auto_pause_on_wifi")
+        private val ROUTING_MODE = stringPreferencesKey("routing_mode")
+        private val CUSTOM_ROUTES = stringPreferencesKey("custom_routes")
 
         private val THEME_MODE = stringPreferencesKey("theme_mode") 
         private val IS_DYNAMIC_COLOR = booleanPreferencesKey("is_dynamic_color")
@@ -439,6 +441,22 @@ class SettingsStore(context: Context) {
     }
     val autoPauseOnWifi: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[AUTO_PAUSE_ON_WIFI] ?: false
+    }
+    val routingMode: Flow<String> = dataStore.data.map { prefs ->
+        prefs[ROUTING_MODE] ?: VpnRoutingPolicy.MODE_ALL
+    }
+    suspend fun saveRoutingMode(mode: String) {
+        dataStore.edit { prefs ->
+            prefs[ROUTING_MODE] = mode
+        }
+    }
+    val customRoutes: Flow<String> = dataStore.data.map { prefs ->
+        prefs[CUSTOM_ROUTES] ?: ""
+    }
+    suspend fun saveCustomRoutes(routes: String) {
+        dataStore.edit { prefs ->
+            prefs[CUSTOM_ROUTES] = routes
+        }
     }
     suspend fun isBatteryOptimizationPromptHandled(): Boolean =
         dataStore.data.first()[BATTERY_OPTIMIZATION_PROMPT_HANDLED] ?: false
