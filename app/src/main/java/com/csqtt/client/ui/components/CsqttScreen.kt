@@ -56,6 +56,7 @@ fun CsqttScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .weight(1f)
                 .widthIn(max = CsqttSizes.ContentMaxWidth),
             verticalArrangement = Arrangement.spacedBy(CsqttSpacing.Md),
         ) {

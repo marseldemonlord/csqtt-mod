@@ -75,7 +75,9 @@ import com.csqtt.client.ui.SettingsTab
 import com.csqtt.client.CsqttConstants
 import com.csqtt.client.ui.DeployTab
 import com.csqtt.client.ui.ExceptionsTab
+import com.csqtt.client.ui.RoutingTab
 import com.csqtt.client.ui.InfoTab
+import androidx.compose.ui.text.style.TextOverflow
 import com.csqtt.client.ui.components.LocalCsqttHeaderActions
 import com.csqtt.client.ui.design.CsqttMotion
 import com.csqtt.client.ui.design.CsqttShapes
@@ -266,8 +268,9 @@ private val navItems = listOf(
     NavItem(1, R.string.nav_tunnel, Icons.Filled.VpnKey, Icons.Outlined.VpnKey),
     NavItem(2, R.string.nav_deploy, Icons.Filled.Cloud, Icons.Outlined.Cloud),
     NavItem(3, R.string.nav_exceptions, Icons.Filled.FilterList, Icons.Outlined.FilterList),
-    NavItem(4, R.string.nav_logs, Icons.Filled.Terminal, Icons.Outlined.Terminal),
-    NavItem(5, R.string.nav_info, Icons.Filled.Info, Icons.Outlined.Info),
+    NavItem(4, R.string.nav_routing, Icons.Default.Language, Icons.Outlined.Language),
+    NavItem(5, R.string.nav_logs, Icons.Filled.Terminal, Icons.Outlined.Terminal),
+    NavItem(6, R.string.nav_info, Icons.Filled.Info, Icons.Outlined.Info),
 )
 
 internal fun navigationSwipeProgress(totalDrag: Float, containerWidth: Int): Float =
@@ -348,7 +351,7 @@ fun MainScreen(
     }
 
     LaunchedEffect(selectedTab) {
-        if (selectedTab == 4) TunnelManager.clearUnreadErrors()
+        if (selectedTab == 5) TunnelManager.clearUnreadErrors()
     }
 
     LaunchedEffect(updateCheckIntervalHours) {
@@ -448,7 +451,7 @@ fun MainScreen(
                             onDragEnd = {
                                 if (dragTargetIndex.intValue in activeNavItems.indices && shouldCommitNavigationSwipe(dragProgress.floatValue)) {
                                     selectedTab = activeNavItems[dragTargetIndex.intValue].id
-                                    if (selectedTab == 4) TunnelManager.clearUnreadErrors()
+                                    if (selectedTab == 5) TunnelManager.clearUnreadErrors()
                                 }
                                 dragTargetIndex.intValue = -1
                                 dragProgress.floatValue = 0f
@@ -523,8 +526,11 @@ fun MainScreen(
                                     showSystemApps = showSystemApps,
                                     isWhitelist = isWhitelist,
                                 )
-                                4 -> LogsTab(settingsStore)
-                                5 -> InfoTab(
+                                4 -> RoutingTab(
+                                    settingsStore = settingsStore,
+                                )
+                                5 -> LogsTab(settingsStore)
+                                6 -> InfoTab(
                                     settingsStore = settingsStore,
                                     actionsExpanded = infoActionsExpanded,
                                     projectExpanded = infoProjectExpanded,
@@ -659,7 +665,7 @@ private fun ProxyNavigationBar(
         modifier = modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
-            .padding(horizontal = 22.dp, vertical = 10.dp)
+            .padding(horizontal = 10.dp, vertical = 10.dp)
     ) {
         val trackPadding = 6.dp
         val itemWidth = (maxWidth - trackPadding * 2) / navItems.size
@@ -719,7 +725,7 @@ private fun ProxyNavigationBar(
                                     modifier = Modifier.size(22.dp),
                                     tint = iconColor
                                 )
-                                if (item.id == 4 && unreadErrors > 0) {
+                                if (item.id == 5 && unreadErrors > 0) {
                                     Badge(
                                         containerColor = if (tunnelRunning) colors.primary else CSQTTColors.warning,
                                         contentColor = colors.onPrimary,
@@ -735,7 +741,8 @@ private fun ProxyNavigationBar(
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = if (emphasis > 0.55f) FontWeight.SemiBold else FontWeight.Medium,
                                 color = iconColor,
-                                maxLines = 1
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
