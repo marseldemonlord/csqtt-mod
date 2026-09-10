@@ -5,6 +5,12 @@ package com.csqtt.client
 
 import android.net.VpnService
 import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.Inet4Address
+import java.net.InetAddress
+import java.net.URL
 
 data class RouteCidr(val address: String, val prefixLength: Int)
 
@@ -54,10 +60,50 @@ object VpnRoutingPolicy {
         return RouteCidr(ip, prefix)
     }
 
+    fun parseDomains(raw: String): List<String> {
+        return raw.split(Regex("[,;\\s\\n]+"))
+            .map { it.trim().lowercase() }
+            .filter { it.isNotEmpty() && it.contains(".") && !it.startsWith("#") }
+            .distinct()
+    }
+
+    suspend fun resolveDomainIps(domains: List<String>): Set<String> = withContext(Dispatchers.IO) {
+        val ips = mutableSetOf<String>()
+        for (domain in domains) {
+            runCatching {
+                val addresses = InetAddress.getAllByName(domain)
+                for (addr in addresses) {
+                    if (addr is Inet4Address) {
+                        ips.add(addr.hostAddress)
+                    }
+                }
+            }.onFailure {
+                Log.w(TAG, "Failed to resolve bypass domain: $domain", it)
+            }
+        }
+        ips
+    }
+
+    suspend fun downloadRoutesFromUrl(urlStr: String): Result<List<RouteCidr>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val url = URL(urlStr.trim())
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 10000
+            conn.readTimeout = 15000
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("User-Agent", "CSQTT-Android")
+            val content = conn.inputStream.bufferedReader().use { it.readText() }
+            val cidrs = parseCidrs(content)
+            if (cidrs.isEmpty()) throw IllegalStateException("В файле не найдено корректных CIDR маршрутов")
+            cidrs
+        }
+    }
+
     fun applyRoutes(
         builder: VpnService.Builder,
         mode: String,
         customCidrsRaw: String,
+        bypassDomainsRaw: String = "",
     ): Int {
         if (mode == MODE_SELECTIVE) {
             val userCidrs = parseCidrs(customCidrsRaw)

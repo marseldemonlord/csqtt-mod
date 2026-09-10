@@ -31,6 +31,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.csqtt.client.VpnRoutingPolicy
+import com.csqtt.client.showRaisedToast
+import com.csqtt.client.ui.dialogs.BypassDomainsDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -114,6 +133,9 @@ fun ExceptionsTab(
     var isLoading by remember { mutableStateOf(AppCache.cachedList == null) }
     var isMigrationReady by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    val bypassDomains by settingsStore.bypassDomains.collectAsStateWithLifecycle(initialValue = SettingsStore.DEFAULT_BYPASS_DOMAINS)
+    val vpnRoutingMode by settingsStore.routingMode.collectAsStateWithLifecycle(initialValue = VpnRoutingPolicy.MODE_ALL)
+    var showDomainsDialog by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) { settingsStore.migrateLegacyWhitelistMode() }
@@ -258,11 +280,164 @@ fun ExceptionsTab(
             )
         }
 
-        Text(
-            text = stringResource(R.string.exceptions_selected_count, selectedPackages.size),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        AppSectionCard(
+            contentPadding = PaddingValues(horizontal = CsqttSpacing.Md, vertical = CsqttSpacing.Sm),
+            verticalArrangement = Arrangement.spacedBy(CsqttSpacing.Sm),
+        ) {
+            Text(
+                "Маршрутизация трафика и сайтов",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            CsqttSegmentedControl(
+                options = listOf(
+                    VpnRoutingPolicy.MODE_ALL to "Весь трафик (0.0.0.0/0)",
+                    VpnRoutingPolicy.MODE_SELECTIVE to "Только заблокированные",
+                ),
+                selected = vpnRoutingMode,
+                enabled = true,
+                onSelected = { mode ->
+                    if (mode == vpnRoutingMode) return@CsqttSegmentedControl
+                    scope.launch {
+                        settingsStore.saveRoutingMode(mode)
+                        delay(200)
+                        TunnelManager.reloadVpn()
+                    }
+                },
+            )
+            Text(
+                if (vpnRoutingMode == VpnRoutingPolicy.MODE_ALL) {
+                    "Весь трафик направляется в туннель, кроме исключённых приложений и доменов ниже."
+                } else {
+                    "Умный обход: в VPN идут только YouTube, Discord, Meta, Cloudflare и зарубежные CDN. Сайты РФ (.ru) и сервисы идут напрямую."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(
+                        Icons.Outlined.Language,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Column {
+                        Text(
+                            "Исключения доменов",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            "Всегда мимо VPN: ${VpnRoutingPolicy.parseDomains(bypassDomains).size} шт.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                OutlinedButton(
+                    onClick = { showDomainsDialog = true },
+                    shape = CsqttShapes.Control,
+                ) {
+                    Text("Настроить", fontSize = 12.sp)
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text(
+                text = stringResource(R.string.exceptions_selected_count, selectedPackages.size),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = clipboard.primaryClip
+                        val text = clip?.getItemAt(0)?.text?.toString().orEmpty()
+                        val parsed = text.split(Regex("[,;\\s\\n]+"))
+                            .map { it.trim() }
+                            .filter { it.length >= 3 && it.contains(".") && !it.contains(" ") }
+                            .toSet()
+                        if (parsed.isNotEmpty()) {
+                            val updated = selectedPackages + parsed
+                            selectedPackages = updated
+                            persistSelection(updated)
+                            context.showRaisedToast("Добавлено ${parsed.size} приложений из буфера", Toast.LENGTH_SHORT)
+                        } else {
+                            context.showRaisedToast("В буфере не найдено пакетов приложений", Toast.LENGTH_SHORT)
+                        }
+                    },
+                    shape = CsqttShapes.Control,
+                ) {
+                    Icon(Icons.Outlined.ContentPaste, contentDescription = null, modifier = Modifier.height(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Вставить", fontSize = 12.sp)
+                }
+
+                TextButton(
+                    onClick = {
+                        if (selectedPackages.isNotEmpty()) {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("Apps", selectedPackages.sorted().joinToString("\n"))
+                            clipboard.setPrimaryClip(clip)
+                            context.showRaisedToast("Скопировано ${selectedPackages.size} приложений в буфер", Toast.LENGTH_SHORT)
+                        } else {
+                            context.showRaisedToast("Список выбранных приложений пуст", Toast.LENGTH_SHORT)
+                        }
+                    },
+                    shape = CsqttShapes.Control,
+                ) {
+                    Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.height(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Копировать", fontSize = 12.sp)
+                }
+
+                if (selectedPackages.isNotEmpty()) {
+                    TextButton(
+                        onClick = {
+                            selectedPackages = emptySet()
+                            persistSelection(emptySet())
+                            context.showRaisedToast("Список очищен", Toast.LENGTH_SHORT)
+                        },
+                        shape = CsqttShapes.Control,
+                    ) {
+                        Icon(Icons.Outlined.DeleteSweep, contentDescription = null, modifier = Modifier.height(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Очистить", fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        if (showDomainsDialog) {
+            BypassDomainsDialog(
+                initialDomains = bypassDomains,
+                onSave = { updatedDomains ->
+                    scope.launch {
+                        settingsStore.saveBypassDomains(updatedDomains)
+                        delay(200)
+                        TunnelManager.reloadVpn()
+                    }
+                },
+                onDismiss = { showDomainsDialog = false },
+            )
+        }
 
         when {
             !isMigrationReady || isLoading -> {

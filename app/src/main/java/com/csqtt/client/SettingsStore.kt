@@ -135,6 +135,8 @@ class SettingsStore(context: Context) {
         private val AUTO_PAUSE_ON_WIFI = booleanPreferencesKey("auto_pause_on_wifi")
         private val ROUTING_MODE = stringPreferencesKey("routing_mode")
         private val CUSTOM_ROUTES = stringPreferencesKey("custom_routes")
+        private val BYPASS_DOMAINS = stringPreferencesKey("bypass_domains")
+        const val DEFAULT_BYPASS_DOMAINS = "vk.com\nm.vk.com\nwww.vk.com\nyandex.com\nm.yandex.com\nwww.yandex.com\nya.com\nm.ya.com\nwww.ya.com\nrucaptcha.com"
 
         private val THEME_MODE = stringPreferencesKey("theme_mode") 
         private val IS_DYNAMIC_COLOR = booleanPreferencesKey("is_dynamic_color")
@@ -456,6 +458,14 @@ class SettingsStore(context: Context) {
     suspend fun saveCustomRoutes(routes: String) {
         dataStore.edit { prefs ->
             prefs[CUSTOM_ROUTES] = routes
+        }
+    }
+    val bypassDomains: Flow<String> = dataStore.data.map { prefs ->
+        prefs[BYPASS_DOMAINS] ?: DEFAULT_BYPASS_DOMAINS
+    }
+    suspend fun saveBypassDomains(domains: String) {
+        dataStore.edit { prefs ->
+            prefs[BYPASS_DOMAINS] = domains
         }
     }
     suspend fun isBatteryOptimizationPromptHandled(): Boolean =
