@@ -2,7 +2,7 @@ name: Build CSQTT Mod APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, mod-adaptive-padding-and-routing ]
   workflow_dispatch:
 
 jobs:
@@ -64,13 +64,51 @@ jobs:
 
           ls -lh app/src/main/jniLibs/*/*.so
 
-      - name: Build Android Debug APKs
+      - name: Generate Release Keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore release.keystore \
+            -alias csqtt \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass csqtt123 \
+            -keypass csqtt123 \
+            -dname "CN=CSQTT, OU=CSQTT, O=CSQTT, L=Default, S=Default, C=US"
+
+      - name: Build Android Release and Debug APKs
         run: |
           chmod +x gradlew
+
+          echo "Building Release APKs..."
+          ./gradlew assembleRelease --no-daemon -x test \
+            -PKEYSTORE_FILE=release.keystore \
+            -PKEYSTORE_PASSWORD=csqtt123 \
+            -PKEY_ALIAS=csqtt \
+            -PKEY_PASSWORD=csqtt123
+
+          echo "Building Debug APKs..."
           ./gradlew assembleDebug --no-daemon -x test
+
+      - name: Organize Output APKs
+        run: |
+          mkdir -p dist
+          # Copy Release APKs (Optimized with ProGuard/R8 and signed)
+          cp app/build/outputs/apk/release/app-universal-release.apk dist/CSQTT-universal-release.apk || true
+          cp app/build/outputs/apk/release/app-arm64-v8a-release.apk dist/CSQTT-arm64-v8a-release.apk || true
+          cp app/build/outputs/apk/release/app-armeabi-v7a-release.apk dist/CSQTT-armeabi-v7a-release.apk || true
+          cp app/build/outputs/apk/release/app-x86_64-release.apk dist/CSQTT-x86_64-release.apk || true
+
+          # Copy Debug APKs (Unminified with debug symbols)
+          cp app/build/outputs/apk/debug/app-universal-debug.apk dist/CSQTT-universal-debug.apk || true
+          cp app/build/outputs/apk/debug/app-arm64-v8a-debug.apk dist/CSQTT-arm64-v8a-debug.apk || true
+          cp app/build/outputs/apk/debug/app-x86_64-debug.apk dist/CSQTT-x86_64-debug.apk || true
+
+          echo "Available APK artifacts:"
+          ls -lh dist/
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CSQTT-Galaxy-S24-Ultra-Mod
-          path: app/build/outputs/apk/debug/*.apk
+          name: CSQTT-Mod-All-APKs
+          path: dist/*.apk

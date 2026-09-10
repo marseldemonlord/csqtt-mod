@@ -5,6 +5,8 @@ package com.csqtt.client
 
 import android.os.Build
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
@@ -276,21 +278,24 @@ fun CSQTTTheme(
     if (!view.isInEditMode) {
         @Suppress("DEPRECATION")
         SideEffect {
-            val window = (view.context as Activity).window
-            val navigationBarColor = if (darkTheme) {
-                Color.Transparent
-            } else {
-                lerp(colorScheme.background, colorScheme.surface, 0.55f)
-            }
-            window.statusBarColor = Color.Transparent.toArgb()
-            window.navigationBarColor = navigationBarColor.toArgb()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                window.isNavigationBarContrastEnforced = false
-                window.isStatusBarContrastEnforced = false
-            }
-            WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = !darkTheme
-                isAppearanceLightNavigationBars = !darkTheme
+            val activity = view.context.findActivity() ?: (view.context as? Activity)
+            val window = activity?.window
+            if (window != null) {
+                val navigationBarColor = if (darkTheme) {
+                    Color.Transparent
+                } else {
+                    lerp(colorScheme.background, colorScheme.surface, 0.55f)
+                }
+                window.statusBarColor = Color.Transparent.toArgb()
+                window.navigationBarColor = navigationBarColor.toArgb()
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    window.isNavigationBarContrastEnforced = false
+                    window.isStatusBarContrastEnforced = false
+                }
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = !darkTheme
+                    isAppearanceLightNavigationBars = !darkTheme
+                }
             }
         }
     }
@@ -311,4 +316,13 @@ fun CSQTTTheme(
             content = content,
         )
     }
+}
+
+private fun Context.findActivity(): Activity? {
+    var ctx: Context? = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }

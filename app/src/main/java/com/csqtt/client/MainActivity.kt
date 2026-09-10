@@ -88,7 +88,7 @@ import kotlin.math.abs
 
 class MainActivity : ComponentActivity() {
     private val appSettingsStore by lazy { SettingsStore(applicationContext) }
-    private var renderUi by mutableStateOf(false)
+    private var renderUi by mutableStateOf(true)
     private var showVkAuthDialog by mutableStateOf(false)
     private var batteryPromptInFlight = false
 
@@ -205,14 +205,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkAndRequestNotifications() {
-        if (Build.VERSION.SDK_INT >= 33) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= 33) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    checkAndRequestBattery()
+                }
             } else {
                 checkAndRequestBattery()
             }
-        } else {
-            checkAndRequestBattery()
+        }.onFailure {
+            Log.e("MainActivity", "Failed to check or request notification permissions", it)
         }
     }
 

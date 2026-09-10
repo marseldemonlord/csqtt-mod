@@ -13,6 +13,16 @@ import kotlinx.coroutines.launch
 class CsqttApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val dir = getExternalFilesDir(null) ?: filesDir
+                val crashFile = java.io.File(dir, "crash.txt")
+                crashFile.writeText("CRASH on [${thread.name}]: ${throwable.message}\n${throwable.stackTraceToString()}")
+                DeployManager.writeError("CRASH on [${thread.name}]: ${throwable.message}\n${throwable.stackTraceToString()}")
+            } catch (_: Exception) {}
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
         DeployManager.init(this)
 
         CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
