@@ -19,38 +19,57 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK & NDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android NDK
+      - name: Install Build Tools & Ninja
         run: |
-          ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --install "ndk;26.1.10909125"
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang
 
       - name: Set up Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.1
-          targets: aarch64-linux-android
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk
 
-      - name: Compile Rust Core for ARM64 (Galaxy S24 Ultra)
+      - name: Compile Rust Core for Android (arm64-v8a, armeabi-v7a, x86_64)
         run: |
-          export ANDROID_NDK_HOME="${ANDROID_HOME}/ndk/26.1.10909125"
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_LATEST_HOME"
+          echo "Using NDK: $ANDROID_NDK_HOME"
+
           mkdir -p app/src/main/jniLibs/arm64-v8a
+          mkdir -p app/src/main/jniLibs/armeabi-v7a
+          mkdir -p app/src/main/jniLibs/x86_64
+
           cd rust-client
+
+          # Compile arm64-v8a (Samsung Galaxy S24 Ultra)
+          echo "Compiling arm64-v8a..."
           cargo ndk -t arm64-v8a -P 26 build --release
-          cp target/aarch64-linux-android/release/client ../app/src/main/jniLibs/arm64-v8a/libclient.so || \
-          cp ../target/aarch64-linux-android/release/client ../app/src/main/jniLibs/arm64-v8a/libclient.so
+          cp target/aarch64-linux-android/release/client ../app/src/main/jniLibs/arm64-v8a/libclient.so
+
+          # Compile armeabi-v7a (for split APK support)
+          echo "Compiling armeabi-v7a..."
+          cargo ndk -t armeabi-v7a -P 26 build --release
+          cp target/armv7-linux-androideabi/release/client ../app/src/main/jniLibs/armeabi-v7a/libclient.so
+
+          # Compile x86_64
+          echo "Compiling x86_64..."
+          cargo ndk -t x86_64 -P 26 build --release
+          cp target/x86_64-linux-android/release/client ../app/src/main/jniLibs/x86_64/libclient.so
+
           cd ..
 
-      - name: Build Android Debug APK
+          ls -lh app/src/main/jniLibs/*/*.so
+
+      - name: Build Android Debug APKs
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon -x test
 
-      - name: Upload APK Artifact
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: CSQTT-Galaxy-S24-Ultra-Mod
