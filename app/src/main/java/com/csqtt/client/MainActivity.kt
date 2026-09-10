@@ -36,12 +36,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.*
@@ -268,7 +270,7 @@ private val navItems = listOf(
     NavItem(1, R.string.nav_tunnel, Icons.Filled.VpnKey, Icons.Outlined.VpnKey),
     NavItem(2, R.string.nav_deploy, Icons.Filled.Cloud, Icons.Outlined.Cloud),
     NavItem(3, R.string.nav_exceptions, Icons.Filled.FilterList, Icons.Outlined.FilterList),
-    NavItem(4, R.string.nav_routing, Icons.Default.Language, Icons.Outlined.Language),
+    NavItem(4, R.string.nav_routing, Icons.Filled.Language, Icons.Outlined.Language),
     NavItem(5, R.string.nav_logs, Icons.Filled.Terminal, Icons.Outlined.Terminal),
     NavItem(6, R.string.nav_info, Icons.Filled.Info, Icons.Outlined.Info),
 )
