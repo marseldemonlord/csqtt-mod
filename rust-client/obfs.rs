@@ -48,25 +48,25 @@ pub fn calculate_adaptive_padding(
         ObfsMode::Audio => {
             // Opus audio simulation: shape small packets (e.g. TCP ACK/DNS) into realistic audio frame sizes
             if payload_len < 100 {
-                let target = 100 + rng.random_range(0..=48);
+                let target: usize = 100usize + rng.random_range(0usize..=48usize);
                 let needed = target.saturating_sub(payload_len);
                 needed.clamp(1, 255)
             } else {
-                let jitter = rng.random_range(0..base_padding_max.max(24));
+                let jitter: usize = rng.random_range(0usize..base_padding_max.max(24));
                 (jitter + 1).min(255)
             }
         }
         ObfsMode::Video => {
             // Video RTP slice simulation: add randomized jitter to mask raw MTU footprints
             if payload_len >= 800 {
-                let jitter = rng.random_range(16..=base_padding_max.max(64));
+                let jitter: usize = rng.random_range(16usize..=base_padding_max.max(64));
                 (jitter + 1).min(255)
             } else if payload_len < 120 {
-                let target = 128 + rng.random_range(0..=32);
+                let target: usize = 128usize + rng.random_range(0usize..=32usize);
                 let needed = target.saturating_sub(payload_len);
                 needed.clamp(1, 255)
             } else {
-                let jitter = rng.random_range(0..base_padding_max);
+                let jitter: usize = rng.random_range(0usize..base_padding_max);
                 (jitter + 1).min(255)
             }
         }
@@ -186,6 +186,7 @@ impl ObfsCipher {
         if padding_total > max_safe_padding {
             padding_total = max_safe_padding.max(1);
         }
+        let padding_random = padding_total.saturating_sub(1);
         let tail = padding_total + tag_len;
         let range = packet.range();
         if range.start < 24
